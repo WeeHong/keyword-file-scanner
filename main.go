@@ -3,10 +3,12 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -78,6 +80,8 @@ func init() {
 }
 
 func main() {
+	absolutePath := flag.Bool("absolute", false, "Display absolute path")
+	flag.Parse()
 	// zipFile := "./compress/aws-sdk-go-main.zip"
 	// zf, err := zip.OpenReader(zipFile)
 	// check(err)
@@ -87,9 +91,18 @@ func main() {
 	// 	fmt.Printf("=%s\n", file.Name)
 	// 	// fmt.Printf("%s\n\n", readAll(file)) // file content
 	// }
-	fmt.Println(ignoredFolder)
-	_ = scanDirectory()
-	// fmt.Println(filePaths)
+	filePaths := scanDirectory()
+	for _, file := range filePaths {
+		if *absolutePath {
+			root, err := os.Getwd()
+			if err != nil {
+				log.Fatalf("Unable to allocate root path: %v", err)
+			}
+			fmt.Println(path.Join(root, file))
+		} else {
+			fmt.Println(file)
+		}
+	}
 
 	// keywords := os.Args[1:]
 	// for _, keyword := range keywords {
@@ -97,25 +110,30 @@ func main() {
 	// }
 }
 
+func traversal(p *[]string) func(path string, info os.FileInfo, err error) error {
+	return func(path string, file os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if file.IsDir() && ignoredFolder.List[file.Name()] {
+			return filepath.SkipDir
+		}
+		if file.Mode().IsRegular() && file.Name() != ".folderignore" {
+			*p = append(*p, path)
+		}
+		return nil
+	}
+}
+
 func scanDirectory() []string {
 	var p []string
-	_, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("Unable to allocate root path.")
-	}
-	err = filepath.Walk(".",
-		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.Mode().IsRegular() {
-				p = append(p, path)
-			}
-			return nil
-		})
+
+	err := filepath.Walk(".", traversal(&p))
+
 	if err != nil {
 		log.Println(err)
 	}
+
 	return p
 }
 
