@@ -118,7 +118,7 @@ func traversal(p *[]string) func(path string, info os.FileInfo, err error) error
 		if file.IsDir() && ignoredFolder.List[file.Name()] {
 			return filepath.SkipDir
 		}
-		if file.Mode().IsRegular() && file.Name() != ".folderignore" {
+		if file.Mode().IsRegular() && !ignoredFolder.List[file.Name()] {
 			*p = append(*p, path)
 		}
 		return nil
