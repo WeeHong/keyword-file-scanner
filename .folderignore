@@ -1,6 +1,7 @@
 .git
-.env
 .idea
+internal/sheet
 
+.env
 .folderignore
 .gitignore

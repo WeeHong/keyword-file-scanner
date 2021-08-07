@@ -1,6 +1,9 @@
 run:
 	go run main.go
 
+run-a:
+	go run main.go --absolute=true
+
 compile:
 	echo "Compiling for every OS and Platform"
 	GOOS=freebsd GOARCH=386 go build -o bin/main-freebsd-386 main.go

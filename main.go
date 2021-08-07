@@ -1,134 +1,65 @@
 package main
 
 import (
-	"archive/zip"
 	"bufio"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
-type folder struct {
-	List map[string]bool
-}
-
-type myCloser interface {
-	Close() error
-}
-
-// closeFile is a helper function which streamlines closing
-// with error checking on different file types.
-func closeFile(f myCloser) {
-	err := f.Close()
-	check(err)
-}
-
-// readAll is a wrapper function for ioutil.ReadAll. It accepts a zip.File as
-// its parameter, opens it, reads its content and returns it as a byte slice.
-func readAll(file *zip.File) []byte {
-	fc, err := file.Open()
-	check(err)
-	defer closeFile(fc)
-
-	content, err := ioutil.ReadAll(fc)
-	check(err)
-
-	return content
-}
-
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
-func readFile(file *os.File) {
-	scanner := bufio.NewScanner(file)
-	collection := make(map[string]bool)
-
-	for scanner.Scan() {
-		key := strings.Trim(scanner.Text(), " ")
-		if _, ok := collection[key]; !ok {
-			collection[key] = true
-		}
-	}
-
-	ignoredFolder.List = collection
-
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-var ignoredFolder folder
-
-func init() {
-	if _, err := os.Stat(".folderignore"); err == nil {
-		file, err := os.Open(".folderignore")
-		if err != nil {
-			log.Fatalf("Failed to open file: %v", err)
-		}
-		defer file.Close()
-		readFile(file)
-	}
-}
-
 func main() {
+	keywords := flag.String("keyword", "", "Keyword to search")
 	absolutePath := flag.Bool("absolute", false, "Display absolute path")
 	flag.Parse()
-	// zipFile := "./compress/aws-sdk-go-main.zip"
-	// zf, err := zip.OpenReader(zipFile)
-	// check(err)
-	// defer closeFile(zf)
 
-	// for _, file := range zf.File {
-	// 	fmt.Printf("=%s\n", file.Name)
-	// 	// fmt.Printf("%s\n\n", readAll(file)) // file content
-	// }
-	filePaths := scanDirectory()
-	for _, file := range filePaths {
-		if *absolutePath {
-			root, err := os.Getwd()
-			if err != nil {
-				log.Fatalf("Unable to allocate root path: %v", err)
+	if len(*keywords) == 0 {
+		panic("--keyword is required")
+	}
+
+	ignore := readIgnoreFile()
+
+	kys := strings.TrimSpace(*keywords)
+	for _, k := range strings.Split(kys, ",") {
+
+		filePaths := scanDirectory(ignore, k)
+		fmt.Printf("Keyword \"%s\" search resullt:\n", k)
+
+		for _, file := range filePaths {
+			if *absolutePath {
+				root, err := os.Getwd()
+				if err != nil {
+					log.Fatalf("Unable to allocate root path: %v", err)
+				}
+				fmt.Println(path.Join(root, file))
+			} else {
+				fmt.Println(file)
 			}
-			fmt.Println(path.Join(root, file))
-		} else {
-			fmt.Println(file)
 		}
-	}
-
-	// keywords := os.Args[1:]
-	// for _, keyword := range keywords {
-	// 	fmt.Println(keyword)
-	// }
-}
-
-func traversal(p *[]string) func(path string, info os.FileInfo, err error) error {
-	return func(path string, file os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if file.IsDir() && ignoredFolder.List[file.Name()] {
-			return filepath.SkipDir
-		}
-		if file.Mode().IsRegular() && !ignoredFolder.List[file.Name()] {
-			*p = append(*p, path)
-		}
-		return nil
 	}
 }
 
-func scanDirectory() []string {
+func readIgnoreFile() map[string]struct{} {
+	ignore := map[string]struct{}{}
+	if f, err := os.OpenFile(".folderignore", os.O_RDONLY, 0644); err == nil {
+		s := bufio.NewScanner(f)
+		for s.Scan() {
+			p := strings.TrimSpace(s.Text())
+			d := strings.Split(p, "/")
+			ignore[d[len(d)-1]] = struct{}{}
+		}
+		f.Close()
+	}
+	return ignore
+}
+
+func scanDirectory(ignore map[string]struct{}, keyword string) []string {
 	var p []string
 
-	err := filepath.Walk(".", traversal(&p))
+	err := filepath.Walk(".", traversal(ignore, &p, keyword))
 
 	if err != nil {
 		log.Println(err)
@@ -137,69 +68,45 @@ func scanDirectory() []string {
 	return p
 }
 
-func filterDirectory(path string, keyword string) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		log.Fatalf("Unable to read file from the path: %v", err)
-	}
-	if fi.Mode().IsRegular() {
-		f, err := ioutil.ReadFile(path)
+func traversal(ignore map[string]struct{}, p *[]string, keyword string) func(path string, info os.FileInfo, err error) error {
+	return func(path string, file os.FileInfo, err error) error {
 		if err != nil {
-			log.Fatalf("Unable to read file content: %v", err)
+			return err
 		}
 
-		matched, err := regexp.Match(keyword, f)
-		if err != nil {
-			log.Fatalf("Unable to match the regexp pattern")
+		_, ok := ignore[file.Name()]
+
+		if file.IsDir() && ok {
+			return filepath.SkipDir
 		}
 
-		if matched {
-			fmt.Println("File path: ", path)
+		if file.Mode().IsRegular() && !ok {
+			showLineContainsText(path, keyword, p)
 		}
+
+		return nil
 	}
 }
 
-func showFilenameContainsText(path string) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		log.Fatalf("Unable to read file from the path: %v", err)
-	}
-	if fi.Mode().IsRegular() {
-		fmt.Println("file", path)
-		f, err := ioutil.ReadFile(path)
-		if err != nil {
-			log.Fatalf("Unable to read file content: %v", err)
-		}
-
-		matched, err := regexp.Match(`Unable`, f)
-		if err != nil {
-			log.Fatalf("Unable to match the regexp pattern")
-		}
-		fmt.Println(matched)
-	}
-}
-
-func showLineContainsText(path string) {
-	f, err := os.Open(path)
-	if err != nil {
-		log.Fatalf("Unable to open file")
-	}
+func showLineContainsText(path string, keyword string, p *[]string) {
+	f, _ := os.OpenFile(path, os.O_RDONLY, 0644)
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 512*1024)
+	scanner.Buffer(buf, 512*1024)
 
 	line := 1
 
 	for scanner.Scan() {
-		fmt.Println(scanner.Text())
-		if strings.Contains(scanner.Text(), "Unable") {
-			fmt.Println("Found at: ", line)
+		if strings.Contains(scanner.Text(), keyword) {
+			s := fmt.Sprintf("Found at: %s, Line: %d", path, line)
+			*p = append(*p, s)
 		}
 		line++
 	}
 
 	if err := scanner.Err(); err != nil {
-		// Handle the error
-		fmt.Println(err)
+		log.Fatalf("Failed to read the text: %v", err)
 	}
 }
