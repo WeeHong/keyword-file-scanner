@@ -1,5 +1,14 @@
 # Keyword File Scanner
 
-This application scan through the entire folder directory by using tree traversal method and extract the files path.
+This application scan through all the files in directory to search for a specific keyword.
 
-Then it will read the file content based on the absolute file path and scanning the document.
+## How to use
+
+Create a `.folderignore` file to include the file or folder you would like to exclude
+
+## Arguement
+
+| Argument | Description                                        |          | Example                   |
+| -------- | -------------------------------------------------- | -------- | ------------------------- |
+| keyword  | Keyword to search through entire project structure | Require  | `--keyword="console.log"` |
+| absolute | Show absolute path of the system                   | Optional | `--absolute="true"`       |

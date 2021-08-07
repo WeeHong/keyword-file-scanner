@@ -6,69 +6,75 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
 
 func main() {
-	keywords := flag.String("keyword", "", "Keyword to search")
-	absolutePath := flag.Bool("absolute", false, "Display absolute path")
+	keywordsArgs := flag.String("keyword", "", "Keyword to search")
+	_ = flag.Bool("absolute", false, "Display absolute path")
 	flag.Parse()
 
-	if len(*keywords) == 0 {
+	if len(*keywordsArgs) == 0 {
 		panic("--keyword is required")
 	}
 
-	ignore := readIgnoreFile()
+	var ignore map[string]struct{}
+	var keywords []string
 
-	kys := strings.TrimSpace(*keywords)
-	for _, k := range strings.Split(kys, ",") {
+	for _, k := range strings.Split(*keywordsArgs, ",") {
+		keywords = append(keywords, strings.TrimSpace(k))
+	}
 
-		filePaths := scanDirectory(ignore, k)
-		fmt.Printf("Keyword \"%s\" search resullt:\n", k)
+	if f, err := os.OpenFile(".folderignore", os.O_RDONLY, 0644); err == nil {
+		ignore = readIgnoreFile(f)
+		defer f.Close()
+	}
 
-		for _, file := range filePaths {
-			if *absolutePath {
-				root, err := os.Getwd()
-				if err != nil {
-					log.Fatalf("Unable to allocate root path: %v", err)
-				}
-				fmt.Println(path.Join(root, file))
-			} else {
-				fmt.Println(file)
+	filePaths, err := scanDirectory(ignore)
+	if err != nil {
+		log.Fatalf("Failed to scan the project structure: %v", err)
+	}
+
+	for _, k := range keywords {
+		fmt.Println("--------------------------------------------")
+		fmt.Printf("Keyword: %s\n\n", k)
+		for _, p := range filePaths {
+			isFound := false
+			isDetectKeyword(p, k, &isFound)
+			if isFound {
+				showLineContainsText(p, k)
 			}
 		}
 	}
+
 }
 
-func readIgnoreFile() map[string]struct{} {
+func readIgnoreFile(f *os.File) map[string]struct{} {
 	ignore := map[string]struct{}{}
-	if f, err := os.OpenFile(".folderignore", os.O_RDONLY, 0644); err == nil {
-		s := bufio.NewScanner(f)
-		for s.Scan() {
-			p := strings.TrimSpace(s.Text())
-			d := strings.Split(p, "/")
-			ignore[d[len(d)-1]] = struct{}{}
-		}
-		f.Close()
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		p := strings.TrimSpace(s.Text())
+		d := strings.Split(p, "/")
+		ignore[d[len(d)-1]] = struct{}{}
 	}
+	f.Close()
 	return ignore
 }
 
-func scanDirectory(ignore map[string]struct{}, keyword string) []string {
+func scanDirectory(ignore map[string]struct{}) ([]string, error) {
 	var p []string
 
-	err := filepath.Walk(".", traversal(ignore, &p, keyword))
+	err := filepath.Walk(".", traversal(ignore, &p))
 
 	if err != nil {
-		log.Println(err)
+		return nil, err
 	}
 
-	return p
+	return p, nil
 }
 
-func traversal(ignore map[string]struct{}, p *[]string, keyword string) func(path string, info os.FileInfo, err error) error {
+func traversal(ignore map[string]struct{}, p *[]string) func(path string, info os.FileInfo, err error) error {
 	return func(path string, file os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -81,27 +87,45 @@ func traversal(ignore map[string]struct{}, p *[]string, keyword string) func(pat
 		}
 
 		if file.Mode().IsRegular() && !ok {
-			showLineContainsText(path, keyword, p)
+			*p = append(*p, path)
 		}
 
 		return nil
 	}
 }
 
-func showLineContainsText(path string, keyword string, p *[]string) {
+func isDetectKeyword(path string, keyword string, isFound *bool) {
 	f, _ := os.OpenFile(path, os.O_RDONLY, 0644)
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
 	buf := make([]byte, 512*1024)
-	scanner.Buffer(buf, 512*1024)
 
+	scanner.Buffer(buf, 512*1024)
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), keyword) {
+			*isFound = true
+		}
+	}
+
+	if *isFound {
+		fmt.Printf("%s\n", path)
+	}
+}
+
+func showLineContainsText(path string, keyword string) {
+	f, _ := os.OpenFile(path, os.O_RDONLY, 0644)
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 512*1024)
 	line := 1
+
+	scanner.Buffer(buf, 512*1024)
 
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), keyword) {
-			s := fmt.Sprintf("Found at: %s, Line: %d", path, line)
-			*p = append(*p, s)
+			fmt.Printf("\t%s, Line: %d\n", path, line)
 		}
 		line++
 	}
