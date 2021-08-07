@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
 
 func main() {
 	keywordsArgs := flag.String("keyword", "", "Keyword to search")
-	_ = flag.Bool("absolute", false, "Display absolute path")
+	absolutePath := flag.Bool("absolute", false, "Display absolute path")
 	flag.Parse()
 
 	if len(*keywordsArgs) == 0 {
@@ -41,7 +42,7 @@ func main() {
 		fmt.Printf("Keyword: %s\n\n", k)
 		for _, p := range filePaths {
 			isFound := false
-			isDetectKeyword(p, k, &isFound)
+			isDetectKeyword(*absolutePath, p, k, &isFound)
 			if isFound {
 				showLineContainsText(p, k)
 			}
@@ -94,8 +95,20 @@ func traversal(ignore map[string]struct{}, p *[]string) func(path string, info o
 	}
 }
 
-func isDetectKeyword(path string, keyword string, isFound *bool) {
-	f, _ := os.OpenFile(path, os.O_RDONLY, 0644)
+func isDetectKeyword(absolute bool, filePath string, keyword string, isFound *bool) {
+	var p string
+
+	if absolute {
+		root, err := os.Getwd()
+		if err != nil {
+			log.Fatalf("Failed to aollcate root path: %v", err)
+		}
+		p = path.Join(root, filePath)
+	} else {
+		p = filePath
+	}
+
+	f, _ := os.OpenFile(filePath, os.O_RDONLY, 0644)
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
@@ -109,7 +122,7 @@ func isDetectKeyword(path string, keyword string, isFound *bool) {
 	}
 
 	if *isFound {
-		fmt.Printf("%s\n", path)
+		fmt.Printf("%s\n", p)
 	}
 }
 
@@ -125,7 +138,7 @@ func showLineContainsText(path string, keyword string) {
 
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), keyword) {
-			fmt.Printf("\t%s, Line: %d\n", path, line)
+			fmt.Printf("\tLine: %d\n", line)
 		}
 		line++
 	}
