@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path"
@@ -44,7 +45,7 @@ func main() {
 			isFound := false
 			isDetectKeyword(*absolutePath, p, k, &isFound)
 			if isFound {
-				showLineContainsText(p, k)
+				ShowLineContainsText(os.Stdout, p, k)
 			}
 		}
 	}
@@ -126,7 +127,7 @@ func isDetectKeyword(absolute bool, filePath string, keyword string, isFound *bo
 	}
 }
 
-func showLineContainsText(path string, keyword string) {
+func ShowLineContainsText(writer io.Writer, path string, keyword string) {
 	f, _ := os.OpenFile(path, os.O_RDONLY, 0644)
 	defer f.Close()
 
