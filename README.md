@@ -11,4 +11,4 @@ Create a `.folderignore` file to include the file or folder you would like to ex
 | Argument | Description                                        |          | Example                   |
 | -------- | -------------------------------------------------- | -------- | ------------------------- |
 | keyword  | Keyword to search through entire project structure | Require  | `--keyword="console.log"` |
-| absolute | Show absolute path of the system                   | Optional | `--absolute="true"`       |
+| absolute | Show absolute path of the system                   | Optional | `--absolute`       |
