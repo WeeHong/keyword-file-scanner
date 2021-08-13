@@ -34,7 +34,10 @@ func main() {
 		log.Fatalf("Failed to scan the project structure: %v", err)
 	}
 
-	showOutput(filePaths, *keywordsArgs, *absolutePath)
+	for _, p := range filePaths {
+		loc := scanLine(os.Stdout, p, *keywordsArgs)
+		showOutput(loc, *absolutePath, p)
+	}
 
 }
 
@@ -101,23 +104,19 @@ func scanLine(writer io.Writer, path string, keyword string) []string {
 	return loc
 }
 
-func showOutput(filePaths []string, keyword string, absPath bool) {
-	for _, p := range filePaths {
-		loc := scanLine(os.Stdout, p, keyword)
-		if len(loc) > 0 {
-			if absPath {
-				root, err := os.Getwd()
-				if err != nil {
-					log.Fatalf("Failed to aollcate root path: %v", err)
-				}
-				p = path.Join(root, p)
+func showOutput(loc []string, absPath bool, filepath string) {
+	if len(loc) > 0 {
+		if absPath {
+			root, err := os.Getwd()
+			if err != nil {
+				log.Fatalf("Failed to aollcate root path: %v", err)
 			}
-			fmt.Printf("%s: \n", p)
+			filepath = path.Join(root, filepath)
 		}
+		fmt.Printf("%s: \n", filepath)
+	}
 
-		for _, line := range loc {
-
-			fmt.Println(line)
-		}
+	for _, line := range loc {
+		fmt.Println(line)
 	}
 }
