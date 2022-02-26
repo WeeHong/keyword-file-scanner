@@ -1,4 +1,4 @@
-# Keyword File Scanner
+# [ Learning ] Keyword File Scanner
 
 This application scan through all the files in directory to search for a specific keyword.
 
